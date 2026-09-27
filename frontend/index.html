@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EntityResolve</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --panel2: #1e222b; --border: #2a2f3a;
+    --text: #e8eaf0; --muted: #8b92a5; --accent: #5b8cff; --accent2: #7c5bff;
+    --good: #3ecf8e; --warn: #f5a623; --bad: #ff5c5c; --mono: 'SFMono-Regular', Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, Segoe UI, Roboto, sans-serif; }
+  header { padding: 20px 32px; border-bottom: 1px solid var(--border); display:flex; justify-content:space-between; align-items:center; position: sticky; top:0; background: var(--bg); z-index: 10;}
+  header h1 { font-size: 17px; margin: 0; font-weight: 600; cursor: pointer; }
+  header h1 span { color: var(--accent); }
+  nav { display:flex; gap: 6px; }
+  nav button { background: none; border: 1px solid var(--border); color: var(--muted); padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; }
+  nav button.active { background: var(--accent); color: white; border-color: var(--accent); }
+  main { max-width: 1100px; margin: 0 auto; padding: 32px; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 24px; margin-bottom: 20px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  label { font-size: 12px; color: var(--muted); display:block; margin-bottom: 6px; }
+  input, select { width: 100%; background: var(--panel2); border: 1px solid var(--border); color: var(--text); padding: 10px 12px; border-radius: 8px; font-size: 14px; }
+  button.btn { background: var(--accent); color: white; border: none; padding: 10px 18px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; }
+  button.btn.secondary { background: var(--panel2); border: 1px solid var(--border); color: var(--text); }
+  button.btn.small { padding: 6px 12px; font-size: 12px; }
+  button.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .stat-card { background: var(--panel2); border-radius: 10px; padding: 16px; text-align: center; }
+  .stat-card .num { font-size: 26px; font-weight: 700; color: var(--accent); }
+  .stat-card .lbl { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 500; font-size: 11px; text-transform: uppercase; }
+  tr.clickable { cursor: pointer; }
+  tr.clickable:hover { background: var(--panel2); }
+  .badge { padding: 3px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+  .badge.completed { background: rgba(62,207,142,0.15); color: var(--good); }
+  .badge.processing, .badge.matching, .badge.cleaning, .badge.indexing, .badge.enriching, .badge.uploaded, .badge.mapping_suggested, .badge.mapping_confirmed { background: rgba(245,166,35,0.15); color: var(--warn); }
+  .badge.failed, .badge.completed_with_errors { background: rgba(255,92,92,0.15); color: var(--bad); }
+  .hidden { display: none; }
+  .section-title { font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 0 0 14px 0; }
+  .breadcrumb { font-size: 13px; color: var(--muted); margin-bottom: 16px; }
+  .breadcrumb a { color: var(--accent); cursor: pointer; text-decoration: none; }
+  .trace-step { display: flex; gap: 12px; padding: 12px; border-left: 2px solid var(--accent); background: var(--panel2); border-radius: 0 8px 8px 0; margin-bottom: 8px; }
+  .trace-hop { font-family: var(--mono); color: var(--accent2); font-weight: 700; min-width: 50px; }
+  .entity-card { background: var(--panel2); border-radius: 10px; padding: 20px; }
+  .entity-field { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
+  .entity-field .k { color: var(--muted); }
+  .source-tag { display: inline-block; background: rgba(91,140,255,0.15); color: var(--accent); padding: 3px 10px; border-radius: 20px; font-size: 11px; margin: 2px; }
+  .mapping-row { display: grid; grid-template-columns: 1fr 1fr 80px; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .mapping-row .col-name { font-family: var(--mono); font-size: 13px; }
+  .conf { font-size: 11px; color: var(--muted); }
+  .muted { color: var(--muted); font-size: 13px; }
+  .field-provenance-row { padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .field-provenance-row .fname { font-size: 12px; color: var(--muted); text-transform: uppercase; margin-bottom: 4px; }
+  .field-provenance-row .fval { font-size: 14px; margin-bottom: 4px; }
+  #toast { position: fixed; bottom: 20px; right: 20px; background: var(--panel2); border: 1px solid var(--border); padding: 12px 18px; border-radius: 8px; display:none; z-index: 100; }
+  .empty-state { text-align: center; padding: 40px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1 onclick="nav('dashboard')">Entity<span>Resolve</span></h1>
+  <nav>
+    <button data-view="dashboard">Dashboard</button>
+    <button data-view="sources">Sources</button>
+    <button data-view="search">Search</button>
+  </nav>
+</header>
+
+<main id="main"></main>
+<div id="toast"></div>
+
+<script>
+const API = '/api';
+let currentView = 'dashboard';
+let currentParams = {};
+let pollTimer = null;
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.style.display = 'block';
+  setTimeout(() => t.style.display = 'none', 3000);
+}
+function esc(s) { return (s ?? '').toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function nav(view, params={}) {
+  currentView = view; currentParams = params;
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  render();
+}
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => nav(b.dataset.view));
+
+async function render() {
+  const main = document.getElementById('main');
+  if (currentView === 'dashboard') return renderDashboard(main);
+  if (currentView === 'sources') return renderSources(main);
+  if (currentView === 'sourceDetail') return renderSourceDetail(main, currentParams.id);
+  if (currentView === 'search') return renderSearch(main);
+  if (currentView === 'entityDetail') return renderEntityDetail(main, currentParams.id);
+}
+
+// ============================================================ DASHBOARD ===
+async function renderDashboard(main) {
+  main.innerHTML = `<div class="panel"><p class="section-title">Processing Statistics</p><div class="grid4" id="statsGrid">Loading...</div></div>
+    <div class="panel">
+      <p class="section-title">Quick Actions</p>
+      <button class="btn" onclick="nav('sources')">Add / View Sources</button>
+      <button class="btn secondary" onclick="nav('search')" style="margin-left:8px;">Search Repository</button>
+    </div>
+    <div class="panel">
+      <p class="section-title">Recent Import Batches</p>
+      <table><thead><tr><th>Source</th><th>File</th><th>Status</th><th>Progress</th></tr></thead><tbody id="recentBatches"><tr><td colspan="4" class="muted">Loading...</td></tr></tbody></table>
+    </div>`;
+  const [stats, sources, batches] = await Promise.all([
+    fetch(`${API}/stats`).then(r=>r.json()),
+    fetch(`${API}/sources`).then(r=>r.json()),
+    fetch(`${API}/batches`).then(r=>r.json()),
+  ]);
+  const items = [
+    ['total_sources','Sources'], ['total_batches','Import Batches'],
+    ['total_records','Total Records'], ['total_entities','Master Entities'],
+    ['matched_records','Matched Records'], ['unresolved_records','Unresolved'],
+    ['new_entities','Newly Created'], ['batches_with_errors','Batches w/ Errors'],
+  ];
+  document.getElementById('statsGrid').innerHTML = items.map(([k,l]) =>
+    `<div class="stat-card"><div class="num">${stats[k]}</div><div class="lbl">${l}</div></div>`).join('');
+
+  const srcById = Object.fromEntries(sources.map(s => [s.id, s.name]));
+  const rows = batches.slice(0, 8);
+  document.getElementById('recentBatches').innerHTML = rows.length ? rows.map(b => `
+    <tr class="clickable" onclick="nav('sourceDetail', {id: ${b.source_id}})">
+      <td>${esc(srcById[b.source_id] || ('Source '+b.source_id))}</td>
+      <td>${esc(b.filename)}</td>
+      <td><span class="badge ${b.status}">${b.status}</span></td>
+      <td>${b.processed_rows}/${b.total_rows}</td>
+    </tr>`).join('') : `<tr><td colspan="4" class="muted">No imports yet — add a source to get started.</td></tr>`;
+}
+
+// ============================================================== SOURCES ===
+async function renderSources(main) {
+  main.innerHTML = `
+    <div class="panel">
+      <p class="section-title">Add a Source</p>
+      <div class="grid2">
+        <div><label>Source Name</label><input id="sourceName" placeholder="e.g. HR Database"></div>
+        <div style="display:flex; align-items:flex-end;"><button class="btn" onclick="createSource()">Create Source</button></div>
+      </div>
+    </div>
+    <div class="panel">
+      <p class="section-title">All Sources</p>
+      <table><thead><tr><th>ID</th><th>Name</th><th>Type</th><th>Batches</th><th></th></tr></thead><tbody id="sourcesTable"></tbody></table>
+    </div>`;
+  await loadSourcesTable();
+}
+
+async function loadSourcesTable() {
+  const sources = await fetch(`${API}/sources`).then(r=>r.json());
+  const tbody = document.getElementById('sourcesTable');
+  tbody.innerHTML = sources.length ? sources.map(s => `
+    <tr class="clickable" onclick="nav('sourceDetail', {id:${s.id}})">
+      <td>${s.id}</td><td>${esc(s.name)}</td><td>${s.source_type}</td><td>${s.batches}</td>
+      <td><button class="btn small secondary">View &rarr;</button></td>
+    </tr>`).join('') : `<tr><td colspan="5" class="muted">No sources yet — create one above.</td></tr>`;
+}
+
+async function createSource() {
+  const name = document.getElementById('sourceName').value.trim();
+  if (!name) return toast('Enter a source name');
+  const fd = new FormData(); fd.append('name', name); fd.append('source_type', 'csv');
+  const src = await fetch(`${API}/sources`, { method: 'POST', body: fd }).then(r=>r.json());
+  toast(`Created source "${name}"`);
+  nav('sourceDetail', { id: src.id });
+}
+
+// ========================================================= SOURCE DETAIL ===
+async function renderSourceDetail(main, sourceId) {
+  main.innerHTML = `<div class="breadcrumb"><a onclick="nav('sources')">&larr; Sources</a></div><div id="sourceDetailBody" class="muted">Loading...</div>`;
+  await loadSourceDetail(sourceId);
+  pollTimer = setInterval(() => loadSourceDetail(sourceId, true), 2000);
+}
+
+async function loadSourceDetail(sourceId, silent=false) {
+  let source;
+  try { source = await fetch(`${API}/sources/${sourceId}`).then(r=>r.json()); }
+  catch (e) { return; }
+  const body = document.getElementById('sourceDetailBody');
+  if (!body) return; // navigated away
+
+  const pendingMapping = source.batches.find(b => b.status === 'mapping_suggested');
+
+  body.innerHTML = `
+    <div class="panel">
+      <p class="section-title">Source: ${esc(source.name)} (#${source.id})</p>
+      <label>Upload CSV (creates a new import batch under this source)</label>
+      <input type="file" accept=".csv" onchange="uploadFile(${source.id}, this)">
+    </div>
+    ${pendingMapping ? renderMappingPanel(pendingMapping) : ''}
+    <div class="panel">
+      <p class="section-title">Import Batches</p>
+      <table><thead><tr><th>ID</th><th>File</th><th>Status</th><th>Progress</th><th>Matched</th><th>New</th><th>Errors</th></tr></thead>
+      <tbody>${source.batches.length ? source.batches.map(b => `
+        <tr>
+          <td>${b.id}</td><td>${esc(b.filename)}</td>
+          <td><span class="badge ${b.status}">${b.status}</span></td>
+          <td>${b.processed_rows}/${b.total_rows}</td>
+          <td>${b.matched_rows}</td><td>${b.new_entity_rows}</td>
+          <td>${b.error_rows > 0 ? `<span style="color:var(--bad)">${b.error_rows}</span>` : '0'}</td>
+        </tr>`).join('') : `<tr><td colspan="7" class="muted">No batches yet — upload a CSV above.</td></tr>`}
+      </tbody></table>
+    </div>`;
+}
+
+function renderMappingPanel(batch) {
+  const fields = ['email','phone','name','username','member_id','address','company','ignore'];
+  return `<div class="panel">
+    <p class="section-title">Review Field Mapping — Batch #${batch.id} (${esc(batch.filename)})</p>
+    <div class="muted" style="margin-bottom:12px;">AI-suggested mapping below. Review and correct before processing.</div>
+    <div id="mappingRows">
+      ${batch.mapping.map(m => `
+        <div class="mapping-row">
+          <div class="col-name">${esc(m.source_column)}</div>
+          <select data-col="${esc(m.source_column)}">
+            ${fields.map(f => `<option value="${f}" ${f===m.canonical_field?'selected':''}>${f}</option>`).join('')}
+          </select>
+          <div class="conf">${Math.round((m.confidence||0)*100)}% (${m.suggested_by})</div>
+        </div>`).join('')}
+    </div>
+    <button class="btn" style="margin-top:16px;" onclick="confirmMapping(${batch.id})">Confirm Mapping &amp; Start Processing</button>
+  </div>`;
+}
+
+async function uploadFile(sourceId, input) {
+  const file = input.files[0];
+  if (!file) return;
+  const fd = new FormData(); fd.append('file', file);
+  toast('Uploading & inspecting structure...');
+  await fetch(`${API}/sources/${sourceId}/upload`, { method: 'POST', body: fd });
+  await loadSourceDetail(sourceId);
+}
+
+async function confirmMapping(batchId) {
+  const mapping = {};
+  document.querySelectorAll('#mappingRows select').forEach(sel => { mapping[sel.dataset.col] = sel.value; });
+  const fd = new FormData(); fd.append('mapping', JSON.stringify(mapping));
+  await fetch(`${API}/batches/${batchId}/mapping`, { method: 'POST', body: fd });
+  await fetch(`${API}/batches/${batchId}/process`, { method: 'POST' });
+  toast('Processing started');
+  await loadSourceDetail(currentParams.id);
+}
+
+// ================================================================ SEARCH ===
+function renderSearch(main) {
+  main.innerHTML = `
+    <div class="panel">
+      <p class="section-title">Progressive Entity Search</p>
+      <div class="grid2">
+        <div><label>Identifier Type</label>
+          <select id="searchField">
+            <option value="email">Email</option><option value="phone">Phone</option>
+            <option value="username">Username</option><option value="member_id">Member ID</option>
+          </select>
+        </div>
+        <div><label>Value</label><input id="searchValue" placeholder="e.g. chavvi.dhar458@mail.com"></div>
+      </div>
+      <button class="btn" style="margin-top:16px;" onclick="runSearch()">Search &amp; Enrich</button>
+    </div>
+    <div id="searchResults"></div>`;
+}
+
+async function runSearch() {
+  const field = document.getElementById('searchField').value;
+  const value = document.getElementById('searchValue').value.trim();
+  if (!value) return toast('Enter a value to search');
+  toast('Searching & progressively enriching...');
+  const data = await fetch(`${API}/search?field=${field}&value=${encodeURIComponent(value)}`).then(r=>r.json());
+  const results = document.getElementById('searchResults');
+
+  if (!data.found) {
+    results.innerHTML = `<div class="panel"><div class="empty-state">No matching entity found across any source for ${esc(field)} = ${esc(value)}.</div></div>`;
+    return;
+  }
+
+  const e = data.entity;
+  const fieldsToShow = ['name','email','phone','username','member_id','address','company'];
+  results.innerHTML = `
+    <div class="panel">
+      <p class="section-title">Unified Master Entity</p>
+      <div class="entity-card">
+        ${fieldsToShow.map(f => e[f] ? `<div class="entity-field"><span class="k">${f}</span><span>${esc(e[f])}</span></div>` : '').join('')}
+        <div class="entity-field"><span class="k">status</span><span>${e.status}</span></div>
+      </div>
+      <div style="margin-top:14px;">
+        <div class="muted" style="margin-bottom:8px;">Matched across ${data.sources.length} source(s):</div>
+        ${data.sources.map(s => `<span class="source-tag">${esc(s.name)}</span>`).join('')}
+      </div>
+      <button class="btn secondary" style="margin-top:16px;" onclick="nav('entityDetail', {id:${e.id}})">View Full Entity Detail &rarr;</button>
+    </div>
+    <div class="panel">
+      <p class="section-title">Progressive Enrichment Trace &mdash; how the system found this</p>
+      ${data.trace.map(t => `
+        <div class="trace-step">
+          <div class="trace-hop">HOP ${t.hop}</div>
+          <div>
+            <div>Searched <b>${esc(t.searched_field)}</b> = <code>${esc(t.searched_value)}</code> &rarr; found ${t.records_found} record(s)</div>
+            ${t.new_identifiers_discovered.length ? `<div class="muted">Discovered new identifiers: ${t.new_identifiers_discovered.map(n=>`${n.field}=${esc(n.value)}`).join(', ')}</div>` : `<div class="muted">No new identifiers &mdash; enrichment complete</div>`}
+          </div>
+        </div>`).join('')}
+    </div>`;
+}
+
+// ========================================================= ENTITY DETAIL ===
+async function renderEntityDetail(main, entityId) {
+  main.innerHTML = `<div class="breadcrumb"><a onclick="nav('search')">&larr; Search</a></div><div id="entityDetailBody" class="muted">Loading...</div>`;
+  const e = await fetch(`${API}/entities/${entityId}`).then(r=>r.json());
+  const body = document.getElementById('entityDetailBody');
+  const fieldsToShow = ['name','email','phone','username','member_id','address','company'];
+
+  body.innerHTML = `
+    <div class="panel">
+      <p class="section-title">Master Entity #${e.id}</p>
+      <div class="entity-card">
+        ${fieldsToShow.map(f => e[f] ? `<div class="entity-field"><span class="k">${f}</span><span>${esc(e[f])}</span></div>` : '').join('')}
+        <div class="entity-field"><span class="k">status</span><span>${e.status}</span></div>
+        <div class="entity-field"><span class="k">last updated</span><span>${e.updated_at}</span></div>
+      </div>
+      <div style="margin-top:14px;">
+        <div class="muted" style="margin-bottom:8px;">Sourced from ${e.sources.length} database(s):</div>
+        ${e.sources.map(s => `<span class="source-tag">${esc(s.name)}</span>`).join('')}
+      </div>
+    </div>
+
+    <div class="panel">
+      <p class="section-title">Field-Level Provenance &mdash; why each value is here</p>
+      ${fieldsToShow.filter(f => e.field_provenance[f]).map(f => `
+        <div class="field-provenance-row">
+          <div class="fname">${f}</div>
+          ${e.field_provenance[f].map(p => `<div class="fval">${esc(p.value)} <span class="source-tag">source #${p.source_id}</span></div>`).join('')}
+        </div>`).join('') || '<div class="muted">No provenance recorded yet.</div>'}
+    </div>
+
+    <div class="panel">
+      <p class="section-title">Enrichment / Match History</p>
+      ${e.match_log.length ? e.match_log.map(l => `
+        <div class="trace-step">
+          <div class="trace-hop">HOP ${l.hop}</div>
+          <div>Matched on <b>${esc(l.field)}</b> = <code>${esc(l.value)}</code> (confidence ${Math.round(l.confidence*100)}%)</div>
+        </div>`).join('') : '<div class="muted">This entity was the first record seen for its identifiers &mdash; no incoming matches logged yet.</div>'}
+    </div>`;
+}
+
+// init
+nav('dashboard');
+</script>
+
+</body>
+</html>
